@@ -14,6 +14,12 @@ export type WorkerCandidate = {
 
 export type RankedWorker = WorkerCandidate & {
   score: number;
+  /** Jobs completed in the last 30 days — used for fair allocation */
+  recentJobs: number;
+  /** Fair allocation score after applying workload penalty (0–100) */
+  fairScore: number;
+  /** Human-readable workload label */
+  workloadLabel: "Underutilised" | "Active" | "Busy" | "High Load";
 };
 
 export function calculateWorkerScore(candidate: WorkerCandidate) {
@@ -29,6 +35,12 @@ export function calculateWorkerScore(candidate: WorkerCandidate) {
 
 export function rankWorkers(candidates: WorkerCandidate[]): RankedWorker[] {
   return candidates
-    .map((candidate) => ({ ...candidate, score: calculateWorkerScore(candidate) }))
+    .map((candidate) => ({
+      ...candidate,
+      score: calculateWorkerScore(candidate),
+      recentJobs: 0,
+      fairScore: calculateWorkerScore(candidate),
+      workloadLabel: "Active" as const,
+    }))
     .sort((a, b) => b.score - a.score || b.averageRating - a.averageRating || b.completedJobs - a.completedJobs);
 }

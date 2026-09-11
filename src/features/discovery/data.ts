@@ -1,5 +1,6 @@
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { rankWorkers, type RankedWorker, type WorkerCandidate } from "@/lib/domain/matching";
+import { applyFairAllocation } from "@/lib/domain/fair-allocation";
 
 export type ServiceCategory = {
   id: string;
@@ -139,11 +140,16 @@ export async function discoverWorkers(filters: DiscoveryFilters) {
   const rows = (data ?? []) as unknown as WorkerServiceRow[];
   const workerIds = rows.map((row) => row.worker_id);
 
-  const [{ data: locations }, { data: reviews }, { data: availability }, { data: skills }] = await Promise.all([
+  const [{ data: locations }, { data: reviews }, { data: availability }, { data: skills }, { data: recentBookings }] = await Promise.all([
     supabase.rpc("get_public_worker_locations"),
     supabase.from("reviews").select("worker_id,rating").in("worker_id", workerIds),
     supabase.from("worker_availability").select("worker_id,day_of_week,is_active").in("worker_id", workerIds).eq("is_active", true),
-    supabase.from("worker_skills").select("worker_id,name").in("worker_id", workerIds)
+    supabase.from("worker_skills").select("worker_id,name").in("worker_id", workerIds),
+    supabase.from("bookings")
+      .select("worker_id,created_at")
+      .in("worker_id", workerIds)
+      .eq("status", "completed")
+      .gte("created_at", new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString())
   ]);
 
   const addressRows = (locations ?? []) as unknown as AddressRow[];
@@ -161,6 +167,12 @@ export async function discoverWorkers(filters: DiscoveryFilters) {
   const availableWorkers = new Set(availabilityRows.map((item) => item.worker_id));
   const skillsByWorker = new Map<string, string[]>();
   for (const skill of skillRows) skillsByWorker.set(skill.worker_id, [...(skillsByWorker.get(skill.worker_id) ?? []), skill.name]);
+
+  // Recent jobs count per worker (last 30 days) for fair allocation
+  const recentJobsCount = new Map<string, number>();
+  for (const booking of (recentBookings ?? [])) {
+    recentJobsCount.set(booking.worker_id, (recentJobsCount.get(booking.worker_id) ?? 0) + 1);
+  }
   const requestedDay = filters.scheduledAt ? new Date(filters.scheduledAt).getDay() : null;
   const requestedTokens = (filters.requirement ?? filters.query ?? "").toLowerCase().split(/[^a-z0-9]+/).filter((token) => token.length > 2);
 
@@ -219,5 +231,30 @@ export async function discoverWorkers(filters: DiscoveryFilters) {
     })
     .filter((candidate): candidate is WorkerCandidate => candidate !== null);
 
-  return { data: rankWorkers(candidates), error: null };
+  const ranked = rankWorkers(candidates);
+
+  // Apply fair-work allocation — boosts underutilised workers by 25%
+  const fairResults = applyFairAllocation(
+    ranked.map((w) => ({
+      workerId: w.workerId,
+      matchScore: w.score,
+      recentJobs: recentJobsCount.get(w.workerId) ?? 0,
+    }))
+  );
+
+  const fairMap = new Map(fairResults.map((r) => [r.workerId, r]));
+
+  const finalWorkers: RankedWorker[] = ranked
+    .map((w) => {
+      const fair = fairMap.get(w.workerId);
+      return {
+        ...w,
+        recentJobs: fair?.recentJobs ?? 0,
+        fairScore: fair?.fairScore ?? w.score,
+        workloadLabel: fair?.workloadLabel ?? "Active",
+      };
+    })
+    .sort((a, b) => b.fairScore - a.fairScore);
+
+  return { data: finalWorkers, error: null };
 }
