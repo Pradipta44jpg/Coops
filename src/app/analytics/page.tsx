@@ -3,6 +3,9 @@ import { EmptyState } from "@/components/ui/state";
 import { requireRole } from "@/lib/auth/server";
 import { getAnalyticsData } from "@/features/dashboard/analytics-data";
 import { AnalyticsCharts } from "@/features/dashboard/analytics-charts";
+import { DemandForecastPanel } from "@/features/dashboard/demand-forecast-panel";
+import { computeDemandForecasts, DEMO_FORECASTS } from "@/lib/domain/demand-forecast";
+import { getCurrentUser } from "@/lib/auth/server";
 import { Calendar, CheckCircle2, DollarSign, Star, Users, Wrench } from "lucide-react";
 
 export default async function AnalyticsPage() {
@@ -16,6 +19,29 @@ export default async function AnalyticsPage() {
   }
 
   const { kpis, trends, categories, regions, topWorkers } = await getAnalyticsData();
+
+  // Demand forecasting — fetch raw booking + service + address data
+  const dbSession = await getCurrentUser();
+  let forecasts = DEMO_FORECASTS;
+  let isDemo = true;
+
+  if (dbSession.supabase) {
+    const supabase = dbSession.supabase;
+    const [bookingsRes, servicesRes, addressesRes] = await Promise.all([
+      supabase.from("bookings").select("created_at, service_id, address_id"),
+      supabase.from("services").select("id, service_categories(name)"),
+      supabase.from("addresses").select("id, city"),
+    ]);
+
+    const bookings  = bookingsRes.data  ?? [];
+    const services  = servicesRes.data  ?? [];
+    const addresses = addressesRes.data ?? [];
+
+    if (bookings.length > 0) {
+      forecasts = computeDemandForecasts(bookings, services as any, addresses);
+      isDemo = false;
+    }
+  }
 
   return (
     <PageShell
@@ -79,6 +105,11 @@ export default async function AnalyticsPage() {
 
       {/* Analytics Charts */}
       <AnalyticsCharts trends={trends} categories={categories} regions={regions} topWorkers={topWorkers} />
+
+      {/* AI Demand Forecasting */}
+      <div className="mt-6">
+        <DemandForecastPanel forecasts={forecasts} isDemo={isDemo} />
+      </div>
     </PageShell>
   );
 }
