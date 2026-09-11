@@ -105,7 +105,9 @@ export function Navbar({ overlay = false }: { overlay?: boolean }) {
             </>
           ) : null}
           {isAdmin ? (
-            <Link href={"/admin" as Route} className="text-neutral-700 font-medium transition hover:text-[#ef4d23]">Admin</Link>
+            <>
+              <Link href={"/admin" as Route} className="text-neutral-700 font-medium transition hover:text-[#ef4d23]">Admin</Link>
+            </>
           ) : null}
         </div>
 
@@ -165,7 +167,11 @@ export function Navbar({ overlay = false }: { overlay?: boolean }) {
               <>
                 <Link href={"/payments" as Route} onClick={() => setOpen(false)} className="flex items-center justify-between rounded-xl px-3 py-3 text-sm text-neutral-700 hover:bg-neutral-50">Payments</Link>
                 <Link href={"/invoices" as Route} onClick={() => setOpen(false)} className="flex items-center justify-between rounded-xl px-3 py-3 text-sm text-neutral-700 hover:bg-neutral-50">Invoices</Link>
-                {isAdmin ? <Link href={"/admin" as Route} onClick={() => setOpen(false)} className="flex items-center justify-between rounded-xl px-3 py-3 text-sm text-neutral-700 hover:bg-neutral-50">Admin</Link> : null}
+                {isAdmin ? (
+                  <>
+                    <Link href={"/admin" as Route} onClick={() => setOpen(false)} className="flex items-center justify-between rounded-xl px-3 py-3 text-sm text-neutral-700 hover:bg-neutral-50">Admin</Link>
+                  </>
+                ) : null}
                 <button type="button" onClick={() => { setOpen(false); void handleSignOut(); }} className="w-full text-left rounded-xl px-3 py-3 text-sm text-red-600 hover:bg-red-50">Sign out</button>
               </>
             ) : (

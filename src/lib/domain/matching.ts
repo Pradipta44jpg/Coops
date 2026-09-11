@@ -3,6 +3,10 @@ export type WorkerCandidate = {
   fullName: string;
   serviceName: string;
   city: string | null;
+  /** Worker's geocoded latitude — null if address not geocoded yet */
+  latitude: number | null;
+  /** Worker's geocoded longitude — null if address not geocoded yet */
+  longitude: number | null;
   distanceKm: number | null;
   yearsExperience: number;
   averageRating: number;

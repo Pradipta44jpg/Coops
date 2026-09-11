@@ -6,6 +6,8 @@ const candidate: WorkerCandidate = {
   fullName: "Worker",
   serviceName: "Fan repair",
   city: "Kolkata",
+  latitude: 22.5726,
+  longitude: 88.3639,
   distanceKm: 0,
   yearsExperience: 10,
   averageRating: 5,

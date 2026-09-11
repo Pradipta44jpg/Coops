@@ -39,6 +39,13 @@ export function AuthForm({ nextPath = "/dashboard" }: { nextPath?: string }) {
       if (user?.user) {
         const { data: roles } = await supabase.from("profile_roles").select("role").eq("profile_id", user.user.id);
         const roleList = roles?.map((r) => r.role) ?? [];
+
+        // Admin users go straight to analytics
+        if (roleList.includes("platform_admin") || roleList.includes("cooperative_admin")) {
+          window.location.assign("/analytics");
+          return;
+        }
+
         if (roleList.includes("worker")) {
           const { data: worker } = await supabase.from("workers").select("id").eq("profile_id", user.user.id).maybeSingle();
           if (!worker) {

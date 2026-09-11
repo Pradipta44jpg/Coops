@@ -220,6 +220,8 @@ export async function discoverWorkers(filters: DiscoveryFilters) {
         fullName: worker.profiles?.full_name ?? "Unnamed worker",
         serviceName: service.name,
         city: address?.city ?? null,
+        latitude: address?.latitude ?? null,
+        longitude: address?.longitude ?? null,
         distanceKm,
         yearsExperience: worker.years_experience,
         averageRating,

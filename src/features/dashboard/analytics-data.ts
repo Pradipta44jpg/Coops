@@ -102,15 +102,30 @@ export async function getAnalyticsData() {
   });
   const regions: RegionDemand[] = Object.entries(regCounts).map(([city, count]) => ({ city, count }));
 
-  // Top workers
+  // Build a per-worker average rating from the reviews table
+  const ratingsByWorker = new Map<string, { sum: number; count: number }>();
+  reviews.forEach((r) => {
+    const workerId = r.worker_id as string;
+    const existing = ratingsByWorker.get(workerId) ?? { sum: 0, count: 0 };
+    ratingsByWorker.set(workerId, { sum: existing.sum + r.rating, count: existing.count + 1 });
+  });
+
+  // Top workers — sorted by completed jobs descending, take top 5
   const topWorkers: TopWorker[] = workers
+    .sort((a, b) => (b.completed_jobs ?? 0) - (a.completed_jobs ?? 0))
     .slice(0, 5)
-    .map((w) => ({
-      id: w.profile_id,
-      name: `Worker #${w.profile_id.slice(0, 6)}`,
-      rating: 4.9,
-      jobsCompleted: w.completed_jobs ?? 0
-    }));
+    .map((w) => {
+      const workerRatings = ratingsByWorker.get(w.profile_id);
+      const rating = workerRatings
+        ? Number((workerRatings.sum / workerRatings.count).toFixed(1))
+        : 0;
+      return {
+        id: w.profile_id,
+        name: `Worker #${w.profile_id.slice(0, 6)}`,
+        rating,
+        jobsCompleted: w.completed_jobs ?? 0
+      };
+    });
 
   return {
     kpis: {

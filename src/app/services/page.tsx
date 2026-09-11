@@ -3,6 +3,8 @@ import { EmptyState, ErrorState } from "@/components/ui/state";
 import { getServiceCategories, discoverWorkers } from "@/features/discovery/data";
 import { SearchForm } from "@/features/discovery/search-form";
 import { WorkerResults } from "@/features/discovery/worker-results";
+import { WorkerMapToggle } from "@/features/discovery/worker-map-toggle";
+import type { WorkerMapPin } from "@/features/discovery/worker-map";
 
 type PageProps = {
   searchParams: Promise<{
@@ -39,6 +41,20 @@ export default async function ServicesPage({ searchParams }: PageProps) {
     })
   ]);
 
+  // Build map pins from workers that have geocoded coordinates
+  const mapPins: WorkerMapPin[] = workers.data
+    .filter((w) => w.latitude !== null && w.longitude !== null)
+    .map((w) => ({
+      workerId: w.workerId,
+      fullName: w.fullName,
+      serviceName: w.serviceName,
+      city: w.city,
+      latitude: w.latitude as number,
+      longitude: w.longitude as number,
+      fairScore: w.fairScore,
+      averageRating: w.averageRating,
+    }));
+
   return (
     <PageShell title="Service Discovery" description="Search and rank verified workers using service, availability, rating, experience, and location signals.">
       <div className="space-y-5">
@@ -61,7 +77,13 @@ export default async function ServicesPage({ searchParams }: PageProps) {
             body="Try a different category, service name, or city. Once workers are verified and linked to services in Supabase, they will appear here."
           />
         ) : (
-          <WorkerResults workers={workers.data} />
+          <WorkerMapToggle
+            pins={mapPins}
+            centerLatitude={latitude}
+            centerLongitude={longitude}
+          >
+            <WorkerResults workers={workers.data} />
+          </WorkerMapToggle>
         )}
       </div>
     </PageShell>
