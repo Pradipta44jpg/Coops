@@ -451,3 +451,45 @@ export function useUpdateAvailability() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["cw-availability"] }),
   });
 }
+
+
+// ─── useForecasts ──────────────────────────────────────────────────────────────
+// Runs the AI demand forecasting engine client-side using Supabase data.
+
+import type { DemandForecast } from "@/lib/domain/demand-forecast";
+export type { DemandForecast };
+
+export function useForecasts() {
+  return useQuery<{ forecasts: DemandForecast[]; isDemo: boolean }>({
+    queryKey: ["cw-forecasts"],
+    queryFn: async () => {
+      const sb = getSupabaseBrowserClient();
+      if (!sb) return { forecasts: [], isDemo: true };
+
+      const [bookingsRes, servicesRes, addressesRes] = await Promise.all([
+        sb.from("bookings").select("created_at, service_id, address_id")
+          .gte("created_at", new Date(Date.now() - 8 * 7 * 24 * 60 * 60 * 1000).toISOString()),
+        sb.from("services").select("id, service_categories(name)"),
+        sb.from("addresses").select("id, city"),
+      ]);
+
+      const bookings  = bookingsRes.data  ?? [];
+      const services  = servicesRes.data  ?? [];
+      const addresses = addressesRes.data ?? [];
+
+      if (bookings.length === 0) {
+        const { DEMO_FORECASTS } = await import("@/lib/domain/demand-forecast");
+        return { forecasts: DEMO_FORECASTS, isDemo: true };
+      }
+
+      const { computeDemandForecasts } = await import("@/lib/domain/demand-forecast");
+      const forecasts = computeDemandForecasts(
+        bookings,
+        services as Parameters<typeof computeDemandForecasts>[1],
+        addresses,
+      );
+      return { forecasts, isDemo: false };
+    },
+    staleTime: 60_000,
+  });
+}

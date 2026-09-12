@@ -1,20 +1,20 @@
 "use client";
 
-import { type FormEvent, type ReactNode, useState } from "react";
+import React, { type FormEvent, type ReactNode, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
-  ArrowRight, CalendarClock, Check, CircleAlert, CircleDollarSign,
-  ClipboardList, Clock3, FileWarning, MapPin, Plus, Search,
-  ShieldCheck, Star, UserRound, UsersRound, Wrench, X,
+  ArrowRight, AlertTriangle, Brain, CalendarClock, Check, CircleAlert, CircleDollarSign,
+  ClipboardList, Clock3, Download, FileWarning, Filter, MapPin, Minus, Plus, Search,
+  ShieldCheck, Star, TrendingDown, TrendingUp, UserRound, UsersRound, Wrench, X, Zap,
 } from "lucide-react";
 import { AppShell, PageLoading, PageError, StatusBadge, Avatar, EmptyState } from "./app-shell";
 import {
   useSession, useDashboardSummary, useBookings, useWorkers, useComplaints,
   useAvailability, useReviews, useAdminWorkers,
   useUpdateBookingStatus, useCreateComplaint, useCreateBooking,
-  useUpdateAvailability, useUpdateWorkerVerification,
-  type Booking, type Worker, type Complaint, type Availability, type CWRole,
+  useUpdateAvailability, useUpdateWorkerVerification, useForecasts,
+  type Booking, type Worker, type Complaint, type Availability, type CWRole, type DemandForecast,
 } from "./hooks";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -163,9 +163,178 @@ function Dashboard({ role }: { role: CWRole }) {
   );
 }
 
+
+// ── FcCard ────────────────────────────────────────────────────────────────────
+
+const FC_LEVELS = {
+  CRITICAL: { bg:"#fff1f0", border:"#ffa39e", text:"#cf1322", bar:"#ff4d4f" },
+  HIGH:     { bg:"#fff7e6", border:"#ffd591", text:"#d46b08", bar:"#fa8c16" },
+  MEDIUM:   { bg:"#fffbe6", border:"#ffe58f", text:"#d4b106", bar:"#fadb14" },
+  STABLE:   { bg:"#f5f5f5", border:"#d9d9d9", text:"#595959", bar:"#bfbfbf" },
+  LOW:      { bg:"#e6f4ff", border:"#91caff", text:"#0958d9", bar:"#4096ff" },
+} as const;
+
+function FcCard({ f }: { f: DemandForecast }) {
+  const cfg = FC_LEVELS[f.demandLevel] ?? FC_LEVELS.STABLE;
+  const isUp = f.projectedChangePct > 5;
+  const isDown = f.projectedChangePct < -5;
+  return (
+    <div style={{ background:cfg.bg, border:"1px solid "+cfg.border, borderRadius:14, padding:"14px 16px", display:"flex", flexDirection:"column", gap:10 }}>
+      <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", gap:8 }}>
+        <span style={{ fontSize:12, fontWeight:600, color:"#1a1a1a", display:"flex", alignItems:"center", gap:5 }}>
+          <MapPin size={12} color="#ef4d23" /> {f.city} → {f.category}
+        </span>
+        <span style={{ background:cfg.bg, border:"1px solid "+cfg.border, color:cfg.text, borderRadius:99, padding:"2px 9px", fontSize:10, fontWeight:800, letterSpacing:"0.1em", whiteSpace:"nowrap" }}>
+          {f.demandLevel}
+        </span>
+      </div>
+      <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+        {isUp ? <TrendingUp size={13} color="#ef4d23" /> : isDown ? <TrendingDown size={13} color="#4096ff" /> : <Minus size={13} color="#bfbfbf" />}
+        <span style={{ fontWeight:700, fontSize:13, color: isUp ? "#ef4d23" : isDown ? "#0958d9" : "#595959" }}>
+          {f.projectedChangePct > 0 ? "+" : ""}{f.projectedChangePct}%
+        </span>
+        <span style={{ fontSize:11, color:"#8c8c8c" }}>projected next week</span>
+        <span style={{ marginLeft:"auto", fontSize:11, color:"#8c8c8c" }}>{f.currentCount} bookings</span>
+      </div>
+      <div>
+        <div style={{ display:"flex", justifyContent:"space-between", fontSize:10, color:"#8c8c8c", marginBottom:4 }}>
+          <span>Urgency</span><span style={{ color:cfg.text, fontWeight:700 }}>{f.urgencyScore}/100</span>
+        </div>
+        <div style={{ height:4, borderRadius:99, background:"rgba(0,0,0,.08)", overflow:"hidden" }}>
+          <div style={{ width:f.urgencyScore+"%", height:"100%", background:cfg.bar, borderRadius:99 }} />
+        </div>
+      </div>
+      <p style={{ fontSize:11, color:"#595959", lineHeight:1.5, borderTop:"1px solid rgba(0,0,0,.06)", paddingTop:8, margin:0 }}>{f.recommendation}</p>
+    </div>
+  );
+}
+
+function AdminForecastSection() {
+  const [filter, setFilter] = React.useState("ALL");
+  const [search, setSearch] = React.useState("");
+  const fQ = useForecasts();
+  const all = fQ.data?.forecasts ?? [];
+  const isDemo = fQ.data?.isDemo ?? true;
+  const filtered = all.filter(f => {
+    if (filter !== "ALL" && f.demandLevel !== filter) return false;
+    if (search && !f.city.toLowerCase().includes(search.toLowerCase()) && !f.category.toLowerCase().includes(search.toLowerCase())) return false;
+    return true;
+  });
+  const urgent = filtered.filter(f => f.demandLevel === "CRITICAL" || f.demandLevel === "HIGH");
+  const medium = filtered.filter(f => f.demandLevel === "MEDIUM");
+  const stable = filtered.filter(f => f.demandLevel === "STABLE" || f.demandLevel === "LOW");
+  const urgentCount = all.filter(f => f.demandLevel === "CRITICAL" || f.demandLevel === "HIGH").length;
+
+  function dlCsv() {
+    const rows = [["City","Category","Level","Change%","Count","Urgency","Recommendation"],...all.map(f=>[f.city,f.category,f.demandLevel,f.projectedChangePct,f.currentCount,f.urgencyScore,'"'+f.recommendation.replace(/"/g,"''")+'"'])];
+    const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([rows.map(r=>r.join(",")).join("\n")],{type:"text/csv"}));
+    a.download = "forecast-"+new Date().toISOString().slice(0,10)+".csv"; a.click();
+  }
+
+  return (
+    <div style={{ marginTop:28 }}>
+      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:12, marginBottom:18 }}>
+        <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+          <div style={{ width:36, height:36, borderRadius:10, background:"#0b0f1a", display:"grid", placeItems:"center" }}>
+            <Brain size={18} color="#ef4d23" />
+          </div>
+          <div>
+            <h2 style={{ margin:0, fontSize:15, fontWeight:800 }}>AI Demand Forecasting</h2>
+            <p style={{ margin:0, fontSize:11, color:"#8c8c8c" }}>Next-week service demand by city × category</p>
+          </div>
+        </div>
+        <div style={{ display:"flex", alignItems:"center", gap:8, flexWrap:"wrap" }}>
+          {urgentCount > 0 && <span style={{ background:"#fff1f0", border:"1px solid #ffa39e", color:"#cf1322", borderRadius:99, padding:"4px 12px", fontSize:11, fontWeight:700 }}>🔴 {urgentCount} urgent</span>}
+          {isDemo && <span style={{ background:"#fffbe6", border:"1px solid #ffe58f", color:"#d4b106", borderRadius:99, padding:"4px 12px", fontSize:11 }}>Demo data</span>}
+          <button onClick={dlCsv} style={{ display:"flex", alignItems:"center", gap:6, background:"transparent", border:"1px solid #e0d8cc", borderRadius:9, padding:"6px 12px", fontSize:11, fontWeight:700, cursor:"pointer", color:"#666" }}>
+            <Download size={12} /> Export CSV
+          </button>
+        </div>
+      </div>
+      <div style={{ background:"#0b0f1a", borderRadius:16, padding:"18px 20px", marginBottom:18, display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))", gap:12 }}>
+        {[{n:"01",t:"Ingest",b:"8 weeks of bookings grouped by city × service category."},{n:"02",t:"Compare",b:"Recent 4 weeks vs prior 4 weeks — % change per bucket."},{n:"03",t:"Classify",b:"Urgency 0–100. CRITICAL/HIGH surfaces first for action."}].map(({n,t,b})=>(
+          <div key={n} style={{ background:"rgba(255,255,255,.06)", border:"1px solid rgba(255,255,255,.1)", borderRadius:10, padding:"12px 14px" }}>
+            <span style={{ fontSize:10, fontWeight:800, color:"#ef4d23", letterSpacing:"0.14em" }}>{n}</span>
+            <p style={{ margin:"4px 0 0", fontWeight:700, color:"#fff", fontSize:12 }}>{t}</p>
+            <p style={{ margin:"4px 0 0", color:"rgba(255,255,255,.55)", fontSize:11, lineHeight:1.5 }}>{b}</p>
+          </div>
+        ))}
+      </div>
+      <div className="metric-grid" style={{ marginBottom:18 }}>
+        {[{l:"Total signals",v:String(all.length),d:"city × category"},{l:"Urgent signals",v:String(urgentCount),d:"CRITICAL or HIGH"},{l:"Avg urgency",v:all.length?Math.round(all.reduce((s,f)=>s+f.urgencyScore,0)/all.length)+"/100":"—",d:"score"},{l:"Bookings tracked",v:String(all.reduce((s,f)=>s+f.currentCount,0)),d:"last 4 weeks"}].map((m,i)=>(
+          <div key={m.l} className="panel metric-card" style={{["--metric-color" as string]:["hsl(184 38% 22%)","hsl(2 68% 52%)","hsl(39 83% 63%)","hsl(174 32% 56%)"][i]}}>
+            <div className="metric-kicker"><span className="metric-dot" /> {m.l}</div>
+            <div className="metric-value">{m.v}</div>
+            <div className="metric-detail">{m.d}</div>
+          </div>
+        ))}
+      </div>
+      <div className="panel panel-pad" style={{ marginBottom:18 }}>
+        <div style={{ display:"flex", flexWrap:"wrap", alignItems:"center", gap:8 }}>
+          <Filter size={13} color="#8c8c8c" />
+          <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search city or category…" className="field-input" style={{ minHeight:32 }} />
+          <select value={filter} onChange={e=>setFilter(e.target.value)} className="filter-select" style={{ minHeight:32 }}>
+            <option value="ALL">All levels</option>
+            {["CRITICAL","HIGH","MEDIUM","STABLE","LOW"].map(l=><option key={l} value={l}>{l}</option>)}
+          </select>
+          <span style={{ marginLeft:"auto", fontSize:11, color:"#8c8c8c" }}>{filtered.length} of {all.length} signals</span>
+        </div>
+      </div>
+      {fQ.isLoading ? <div className="skeleton" style={{ height:100, borderRadius:14 }} /> : filtered.length === 0 ? (
+        <div className="panel panel-pad" style={{ textAlign:"center", color:"#8c8c8c", fontSize:13 }}>No signals match filters.</div>
+      ) : (
+        <div style={{ display:"flex", flexDirection:"column", gap:20 }}>
+          {urgent.length>0&&<div><p style={{ fontSize:11, fontWeight:800, textTransform:"uppercase", letterSpacing:"0.14em", color:"#8c8c8c", marginBottom:10 }}>🔴 Urgent ({urgent.length})</p><div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))", gap:12 }}>{urgent.map(f=><FcCard key={f.city+f.category} f={f}/>)}</div></div>}
+          {medium.length>0&&<div><p style={{ fontSize:11, fontWeight:800, textTransform:"uppercase", letterSpacing:"0.14em", color:"#8c8c8c", marginBottom:10 }}>🟡 Watch ({medium.length})</p><div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))", gap:12 }}>{medium.map(f=><FcCard key={f.city+f.category} f={f}/>)}</div></div>}
+          {stable.length>0&&<div><p style={{ fontSize:11, fontWeight:800, textTransform:"uppercase", letterSpacing:"0.14em", color:"#8c8c8c", marginBottom:10 }}>🟢 Normal ({stable.length})</p><div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))", gap:12 }}>{stable.map(f=><FcCard key={f.city+f.category} f={f}/>)}</div></div>}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function CustomerDashboard() { return <Dashboard role="customer" />; }
 export function WorkerDashboard() { return <Dashboard role="worker" />; }
-export function AdminDashboard() { return <Dashboard role="cooperative_admin" />; }
+
+export function AdminDashboard() {
+  const summaryQ = useDashboardSummary("cooperative_admin");
+  if (summaryQ.isLoading) return <AppShell><PageLoading /></AppShell>;
+  if (summaryQ.isError)   return <AppShell><PageError /></AppShell>;
+  const summary = summaryQ.data;
+  const bookings = Array.isArray(summary?.recentBookings) ? summary.recentBookings : [];
+  return (
+    <AppShell>
+      <main className="page">
+        <div className="page-head">
+          <div>
+            <p className="eyebrow">Operations / today</p>
+            <h1 className="page-title">Network pulse</h1>
+            <p className="page-subtitle">A clear view of the cooperative, today.</p>
+          </div>
+        </div>
+        <MetricGrid metrics={summary?.metrics || []} />
+        <div className="two-col">
+          <RecentBookings bookings={bookings} workerView />
+          <div className="stack">
+            <div className="panel panel-pad">
+              <div className="section-head"><h2 className="section-title">Network note</h2><CircleAlert size={16} style={{ color:"hsl(190 12% 45%)" }} /></div>
+              <div className="callout"><Clock3 size={17} /><span>{bookings[0] ? <><strong>{bookings[0].service}</strong> is {bookings[0].status.replaceAll("_"," ")} for {bookings[0].date}.</> : "Nothing needs your attention right now."}</span></div>
+            </div>
+            <div className="panel panel-pad">
+              <div className="section-head"><h2 className="section-title">Quick actions</h2></div>
+              <div className="stack">
+                <Link className="btn btn-ghost justify-between" href="/admin/workers">Workers <ArrowRight size={14} /></Link>
+                <Link className="btn btn-ghost justify-between" href="/admin/bookings">Bookings <ArrowRight size={14} /></Link>
+                <Link className="btn btn-ghost justify-between" href="/admin/analytics">Analytics <ArrowRight size={14} /></Link>
+              </div>
+            </div>
+          </div>
+        </div>
+        <AdminForecastSection />
+      </main>
+    </AppShell>
+  );
+}
 
 // ── BookingModal ──────────────────────────────────────────────────────────────
 
