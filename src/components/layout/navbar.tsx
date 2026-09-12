@@ -12,8 +12,6 @@ import { type Locale, supportedLocales } from "@/lib/i18n/messages";
 const baseLinks: Array<{ labelKey: string; defaultLabel: string; href: Route }> = [
   { labelKey: "nav.home", defaultLabel: "Home", href: "/" },
   { labelKey: "nav.services", defaultLabel: "Services", href: "/services" },
-  { labelKey: "nav.bookings", defaultLabel: "Bookings", href: "/bookings" },
-  { labelKey: "nav.dashboard", defaultLabel: "Dashboard", href: "/dashboard" }
 ];
 
 function FlowerMark() {
@@ -98,12 +96,7 @@ export function Navbar({ overlay = false }: { overlay?: boolean }) {
               {t(link.labelKey) !== link.labelKey ? t(link.labelKey) : link.defaultLabel}
             </Link>
           ))}
-          {userEmail ? (
-            <>
-              <Link href={"/payments" as Route} className="text-neutral-700 transition hover:text-[#ef4d23]">Payments</Link>
-              <Link href={"/invoices" as Route} className="text-neutral-700 transition hover:text-[#ef4d23]">Invoices</Link>
-            </>
-          ) : null}
+
           {isAdmin ? (
             <>
               <Link href={"/admin" as Route} className="text-neutral-700 font-medium transition hover:text-[#ef4d23]">Admin</Link>
@@ -147,10 +140,7 @@ export function Navbar({ overlay = false }: { overlay?: boolean }) {
             </Link>
           )}
 
-          <Link href={"/auth?next=/services" as Route} className="inline-flex items-center gap-1.5 rounded-full bg-[#ef4d23] py-1.5 pl-3.5 pr-1.5 text-xs font-medium text-white sm:pl-4 sm:text-[13px]">
-            <span>{t("actions.tryItOut")}</span>
-            <span className="flex h-5 w-5 items-center justify-center rounded-full bg-white/20"><ChevronRight size={13} /></span>
-          </Link>
+          <Link href={"/auth" as Route} className="inline-flex items-center gap-1.5 rounded-full bg-[#ef4d23] py-1.5 pl-4 pr-4 text-xs font-medium text-white sm:text-[13px]">Sign In</Link>
           <button type="button" className="flex h-9 w-9 items-center justify-center rounded-full text-neutral-800 md:hidden" onClick={() => setOpen((value) => !value)} aria-label={open ? "Close menu" : "Open menu"} aria-expanded={open}>
             {open ? <X size={19} /> : <Menu size={19} />}
           </button>
@@ -165,8 +155,6 @@ export function Navbar({ overlay = false }: { overlay?: boolean }) {
             ))}
             {userEmail ? (
               <>
-                <Link href={"/payments" as Route} onClick={() => setOpen(false)} className="flex items-center justify-between rounded-xl px-3 py-3 text-sm text-neutral-700 hover:bg-neutral-50">Payments</Link>
-                <Link href={"/invoices" as Route} onClick={() => setOpen(false)} className="flex items-center justify-between rounded-xl px-3 py-3 text-sm text-neutral-700 hover:bg-neutral-50">Invoices</Link>
                 {isAdmin ? (
                   <>
                     <Link href={"/admin" as Route} onClick={() => setOpen(false)} className="flex items-center justify-between rounded-xl px-3 py-3 text-sm text-neutral-700 hover:bg-neutral-50">Admin</Link>

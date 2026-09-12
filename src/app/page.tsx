@@ -35,7 +35,7 @@ export default async function HomePage() {
               Shaping <span className="font-serif italic font-normal">Agencies</span><br />of tomorrow
             </h1>
             <p className="mt-4 px-2 text-neutral-700 sm:mt-6" style={{ fontSize: "clamp(13px, 3.5vw, 16px)" }}>The all-in-one platform connecting customers, workers, and cooperatives</p>
-            <a href="/auth?next=/services" className="mt-6 inline-flex items-center gap-3 rounded-full bg-[#0b0f1a] py-2 pl-6 pr-2 text-sm text-white sm:mt-8 sm:py-2.5 sm:pl-7">Try it out<span className="flex h-6 w-6 items-center justify-center rounded-full bg-white/15 sm:h-7 sm:w-7"><ChevronRight size={16} /></span></a>
+            <Link href="/auth" className="mt-6 inline-flex items-center gap-3 rounded-full bg-[#0b0f1a] py-2 pl-6 pr-2 text-sm text-white sm:mt-8 sm:py-2.5 sm:pl-7">Sign In<span className="flex h-6 w-6 items-center justify-center rounded-full bg-white/15 sm:h-7 sm:w-7"><ChevronRight size={16} /></span></Link>
           </div>
           <div className="px-3 sm:px-4"><DashboardPreview categories={categories.data} /></div>
         </div>
