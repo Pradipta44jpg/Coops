@@ -11,10 +11,11 @@ import {
 import { AppShell, PageLoading, PageError, StatusBadge, Avatar, EmptyState } from "./app-shell";
 import {
   useSession, useDashboardSummary, useBookings, useWorkers, useComplaints,
-  useAvailability, useReviews, useAdminWorkers,
+  useAvailability, useReviews, useAdminWorkers, useWorkerApplications, useReviewWorkerApplication,
   useUpdateBookingStatus, useCreateComplaint, useCreateBooking,
   useUpdateAvailability, useUpdateWorkerVerification, useForecasts,
   type Booking, type Worker, type Complaint, type Availability, type CWRole, type DemandForecast,
+  type WorkerApplication,
 } from "./hooks";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -612,17 +613,124 @@ export function EarningsPage() {
 export function AdminWorkersPage() {
   const [search, setSearch] = useState("");
   const workersQ = useAdminWorkers(search);
+  const appsQ = useWorkerApplications();
   const updateVerification = useUpdateWorkerVerification();
+  const reviewApp = useReviewWorkerApplication();
   const workers = Array.isArray(workersQ.data) ? workersQ.data : [];
+  const applications = Array.isArray(appsQ.data) ? appsQ.data : [];
+  const pendingApps = applications.filter(a => a.status === "pending");
+
+  const [rejectingId, setRejectingId] = useState<string | null>(null);
+
   return (
     <AppShell>
       <main className="page">
-        <div className="page-head"><div><p className="eyebrow">Admin</p><h1 className="page-title">Workers</h1><p className="page-subtitle">Manage and verify cooperative workers.</p></div></div>
+        <div className="page-head"><div><p className="eyebrow">Admin</p><h1 className="page-title">Workers</h1><p className="page-subtitle">Review applications and manage verified cooperative workers.</p></div></div>
+
+        {/* ── Pending Applications ── */}
+        <div className="section-head" style={{ marginBottom: 12 }}>
+          <h2 className="section-title">Pending Applications</h2>
+          {pendingApps.length > 0 && (
+            <span style={{ background: "#ef4d23", color: "#fff", borderRadius: 99, fontSize: 11, fontWeight: 700, padding: "2px 9px" }}>
+              {pendingApps.length}
+            </span>
+          )}
+        </div>
+
+        {appsQ.isLoading ? <PageLoading /> : pendingApps.length === 0 ? (
+          <div className="panel panel-pad" style={{ marginBottom: 28 }}>
+            <EmptyState icon={ClipboardList} title="No pending applications" message="New worker applications will appear here for review." />
+          </div>
+        ) : (
+          <div className="stack" style={{ marginBottom: 28 }}>
+            {pendingApps.map((app: WorkerApplication) => (
+              <div key={app.id} className="panel panel-pad" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                    <Avatar initials={app.name.slice(0, 2).toUpperCase()} />
+                    <div>
+                      <strong style={{ fontSize: 14 }}>{app.name}</strong>
+                      <p style={{ fontSize: 12, color: "var(--cw-muted)", margin: 0 }}>
+                        {app.cooperativeName ?? "No cooperative"} · {app.yearsExperience} yr{app.yearsExperience !== 1 ? "s" : ""} exp
+                      </p>
+                    </div>
+                  </div>
+                  <span style={{ fontSize: 11, color: "var(--cw-muted)", whiteSpace: "nowrap" }}>
+                    {new Date(app.submittedAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
+                  </span>
+                </div>
+
+                {app.serviceInterests.length > 0 && (
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                    {app.serviceInterests.map((s) => (
+                      <span key={s} style={{ fontSize: 11, background: "#f5f2ee", borderRadius: 99, padding: "3px 10px", color: "#555" }}>{s}</span>
+                    ))}
+                  </div>
+                )}
+
+                {app.bio && (
+                  <p style={{ fontSize: 12, color: "var(--cw-muted)", lineHeight: 1.6, margin: 0 }}>
+                    &ldquo;{app.bio.length > 200 ? app.bio.slice(0, 200) + "…" : app.bio}&rdquo;
+                  </p>
+                )}
+
+                <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
+                  <button
+                    className="btn btn-primary"
+                    style={{ minHeight: 32, padding: "5px 14px", fontSize: 12 }}
+                    disabled={reviewApp.isPending}
+                    onClick={() => reviewApp.mutate({ applicationId: app.id, status: "verified", cooperativeId: app.cooperativeId ?? undefined })}
+                  >
+                    <Check size={13} style={{ marginRight: 5 }} />
+                    Approve
+                  </button>
+                  <button
+                    className="btn btn-ghost btn-danger"
+                    style={{ minHeight: 32, padding: "5px 14px", fontSize: 12 }}
+                    disabled={reviewApp.isPending}
+                    onClick={() => setRejectingId(rejectingId === app.id ? null : app.id)}
+                  >
+                    <X size={13} style={{ marginRight: 5 }} />
+                    Reject
+                  </button>
+                </div>
+
+                {rejectingId === app.id && (
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <button
+                      className="btn btn-danger"
+                      style={{ minHeight: 32, padding: "5px 14px", fontSize: 12 }}
+                      disabled={reviewApp.isPending}
+                      onClick={() => {
+                        reviewApp.mutate({ applicationId: app.id, status: "rejected" });
+                        setRejectingId(null);
+                      }}
+                    >
+                      Confirm rejection
+                    </button>
+                    <button className="btn btn-ghost" style={{ minHeight: 32, padding: "5px 14px", fontSize: 12 }} onClick={() => setRejectingId(null)}>
+                      Cancel
+                    </button>
+                  </div>
+                )}
+
+                {reviewApp.isError && (
+                  <p style={{ fontSize: 12, color: "#ef4d23" }}>{(reviewApp.error as Error).message}</p>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* ── Verified / All Workers ── */}
+        <div className="section-head" style={{ marginBottom: 12 }}>
+          <h2 className="section-title">All Workers</h2>
+        </div>
         <div className="toolbar">
           <div className="search-box"><Search size={14} /><input placeholder="Search by name…" value={search} onChange={e => setSearch(e.target.value)} /></div>
         </div>
         {workersQ.isLoading ? <PageLoading /> : workers.length === 0 ? (
-          <EmptyState icon={UsersRound} title="No workers found" message="Workers will appear here once added." />
+          <EmptyState icon={UsersRound} title="No workers found" message="Approved workers will appear here." />
         ) : (
           <div className="panel table-wrap">
             <table className="data-table">

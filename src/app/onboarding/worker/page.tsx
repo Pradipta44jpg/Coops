@@ -1,5 +1,6 @@
 import { Navbar } from "@/components/layout/navbar";
 import { WorkerApplicationForm } from "@/features/auth/worker-application-form";
+import { WorkerVerificationPoller } from "@/features/auth/worker-verification-poller";
 import { requireUser } from "@/lib/auth/server";
 
 export default async function WorkerOnboardingPage() {
@@ -10,6 +11,8 @@ export default async function WorkerOnboardingPage() {
     <div className="min-h-screen bg-[#ededed] p-3 sm:p-4">
       <div className="min-h-[calc(100vh-24px)] rounded-2xl bg-[#f5f2ee] sm:min-h-[calc(100vh-32px)] sm:rounded-3xl">
         <Navbar />
+        {/* Silently polls every 5 s; redirects to /worker/dashboard once verified */}
+        <WorkerVerificationPoller />
         <main className="mx-auto max-w-2xl px-4 py-12 sm:px-8 sm:py-20">
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#ef4d23]">Worker onboarding</p>
           <h1 className="mt-3 text-4xl font-medium tracking-tight">Bring your skills to the network.</h1>

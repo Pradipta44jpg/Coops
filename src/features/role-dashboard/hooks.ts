@@ -430,6 +430,72 @@ export function useUpdateWorkerVerification() {
   });
 }
 
+// ─── useWorkerApplications ────────────────────────────────────────────────────
+
+export type WorkerApplication = {
+  id: string;
+  profileId: string;
+  name: string;
+  email: string;
+  cooperativeId: string | null;
+  cooperativeName: string | null;
+  serviceInterests: string[];
+  yearsExperience: number;
+  bio: string;
+  status: "pending" | "verified" | "rejected";
+  submittedAt: string;
+};
+
+export function useWorkerApplications() {
+  return useQuery<WorkerApplication[]>({
+    queryKey: ["cw-worker-applications"],
+    queryFn: async () => {
+      const sb = getSupabaseBrowserClient();
+      if (!sb) return [];
+      const { data } = await sb
+        .from("worker_applications")
+        .select("id,profile_id,cooperative_id,service_interests,years_experience,bio,status,created_at,profiles(full_name),cooperatives(name)")
+        .order("created_at", { ascending: false })
+        .limit(50);
+      return (data ?? []).map((r: any) => ({
+        id: r.id,
+        profileId: r.profile_id,
+        name: r.profiles?.full_name ?? "Unknown",
+        email: "",
+        cooperativeId: r.cooperative_id ?? null,
+        cooperativeName: r.cooperatives?.name ?? null,
+        serviceInterests: r.service_interests ?? [],
+        yearsExperience: r.years_experience ?? 0,
+        bio: r.bio ?? "",
+        status: r.status as WorkerApplication["status"],
+        submittedAt: r.created_at,
+      }));
+    },
+    staleTime: 15_000,
+  });
+}
+
+export function useReviewWorkerApplication() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ applicationId, status, cooperativeId }: { applicationId: string; status: "verified" | "rejected"; cooperativeId?: string }) => {
+      const resp = await fetch(`/api/worker-applications/${applicationId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status, cooperativeId }),
+      });
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({}));
+        throw new Error((err as any).error ?? "Failed to update application.");
+      }
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["cw-worker-applications"] });
+      qc.invalidateQueries({ queryKey: ["cw-admin-workers"] });
+    },
+  });
+}
+
 export function useUpdateAvailability() {
   const qc = useQueryClient();
   return useMutation({
